@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Aggregate data testing</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dashboard-section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .cards-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .analysis-card {
+            background: #fff;
+            /* Overriding dark mode for this specific card style requests, or should I adapt? 
+                                  User image shows white cards. I will adapt to dark mode but keep structure. 
+                                  Actually, let's stick to the dark theme of the app for consistency, 
+                                  but structure it like the image. */
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            min-height: 250px;
+        }
+
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .analysis-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .analysis-unit {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .value-green {
+            color: #4ade80;
+        }
+
+        .value-red {
+            color: #f87171;
+        }
+
+        .sub-text {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.2rem;
+        }
+
+        .upload-container {
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            transition: border-color 0.3s;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-container:hover {
+            border-color: var(--primary-color);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn-label {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .plot-selector-container {
+            margin-bottom: 1.5rem;
+            max-width: 400px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Fullscreen Modal Styles */
+        .modal-fullscreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #0f0f1a;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .modal-fullscreen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Compact header */
+        .modal-fullscreen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1.5rem;
+            background: #1a1a2e;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .modal-fullscreen-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin: 0;
+        }
+
+        .modal-close-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.4rem 1rem;
+            background: linear-gradient(135deg, #f87171, #ef4444);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Compact controls section */
+        .modal-controls-fixed {
+            flex-shrink: 0;
+            padding: 0.5rem 1.5rem;
+            background: #0f0f1a;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-controls-fixed .table-controls {
+            gap: 0.75rem;
+        }
+
+        .modal-controls-fixed .table-search-input {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .modal-controls-fixed .sort-selector,
+        .modal-controls-fixed .sort-order-btn,
+        .modal-controls-fixed .export-btn,
+        .modal-controls-fixed select {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        /* Scrollable table area */
+        .modal-table-scroll {
+            flex: 1;
+            overflow: auto;
+            padding: 0 1rem 1rem 1rem;
+            background: #0f0f1a;
+        }
+
+        /* Compact table */
+        .modal-table-scroll .plots-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            font-size: 0.8rem;
+        }
+
+        .modal-table-scroll .plots-table thead th {
+            position: sticky;
+            top: 0;
+            background: #1a1a2e;
+            z-index: 10;
+            border-bottom: 2px solid var(--primary-color);
+            padding: 0.5rem 0.4rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .modal-table-scroll .plots-table tbody td {
+            padding: 0.4rem 0.4rem;
+            font-size: 0.8rem;
+        }
+
+        .modal-table-scroll .plots-table tbody small {
+            font-size: 0.7rem;
+        }
+
+        /* Compact pagination footer */
+        .modal-pagination-fixed {
+            flex-shrink: 0;
+            padding: 0.4rem 1.5rem;
+            background: #1a1a2e;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .modal-pagination-fixed .pagination-container {
+            gap: 0.5rem;
+        }
+
+        .modal-pagination-fixed .pagination-btn {
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" style="max-width: 1000px;">
+        <a href="index.html" class="back-link"
+            style="color: var(--text-secondary); text-decoration: none; margin-bottom: 1rem; display: inline-block;">←
+            Back</a>
+
+        <header>
+            <h1 style="font-size: 2rem; margin-bottom: 0.5rem;">Aggregate Data Testing</h1>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">Choose your data source to view insights</p>
+        </header>
+
+        <!-- Source Selector Tabs -->
+        <div id="source-selector" style="margin-bottom: 2rem;">
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <button id="tab-upload" onclick="showSourceTab('upload')" class="source-tab active"
+                    style="flex: 1; padding: 1rem; border: 2px solid var(--primary-color); background: rgba(99, 102, 241, 0.1); color: var(--text-primary); border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s;">
+                    📊 Using Available Data
+                </button>
+                <button id="tab-login" onclick="showSourceTab('login')" class="source-tab"
+                    style="flex: 1; padding: 1rem; border: 2px solid var(--border-color); background: transparent; color: var(--text-secondary); border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s;">
+                    🔐 Using Login
+                </button>
+            </div>
+
+            <!-- Upload Section (Tab 1) -->
+            <section id="upload-section" class="source-content">
+                <div class="upload-container">
+                    <input type="file" id="excel-upload" accept=".xlsx, .xls">
+                    <label for="excel-upload" class="upload-btn-label">📂 Upload Excel File</label>
+                    <p id="file-name" style="margin-top: 1rem; color: var(--text-secondary);">Supported formats: .xlsx,
+                        .xls</p>
+                </div>
+            </section>
+
+            <!-- Login Section (Tab 2) -->
+            <section id="login-section" class="source-content hidden">
+                <div
+                    style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem;">
+                    <!-- Login Form (shown when not logged in) -->
+                    <div id="login-form-container">
+                        <h3 style="color: var(--text-primary); margin-bottom: 1.5rem;">🔐 Login to Environment</h3>
+
+                        <!-- ADDED: Server URL Input -->
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label for="server-url">Backend Server URL</label>
+                            <input type="text" id="server-url" value="http://localhost:3000"
+                                placeholder="e.g., http://localhost:3000 or https://your-ngrok-url.app"
+                                style="padding: 0.75rem; border-radius: 8px; background: rgba(99, 102, 241, 0.1); color: var(--text-primary); border: 1px solid var(--primary-color); width: 100%;">
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                Enter the URL where your backend server is running (e.g., ngrok URL for remote access).
+                            </p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; max-width: 600px;">
+                            <div class="form-group">
+                                <label for="login-environment">Environment</label>
+                                <select id="login-environment"
+                                    style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); width: 100%;">
+                                    <option value="" disabled selected>Select environment</option>
+                                    <option value="QA1">QA1</option>
+                                    <option value="QA2">QA2</option>
+                                    <option value="QA3">QA3</option>
+                                    <option value="QA4">QA4</option>
+                                    <option value="QA5">QA5</option>
+                                    <option value="QA6">QA6</option>
+                                    <option value="QA7">QA7</option>
+                                    <option value="QA8">QA8</option>
+                                    <option value="Prod">Prod</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="login-tenant">Tenant</label>
+                                <input type="text" id="login-tenant" placeholder="e.g., sf_plus_qazone2"
+                                    style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); width: 100%;">
+                            </div>
+                            <div class="form-group">
+                                <label for="login-username">Username</label>
+                                <input type="text" id="login-username"
+                                    style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); width: 100%;">
+                            </div>
+                            <div class="form-group">
+                                <label for="login-password">Password</label>
+                                <input type="password" id="login-password"
+                                    style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); width: 100%;">
+                            </div>
+                        </div>
+                        <button id="login-btn" onclick="handleLogin()"
+                            style="margin-top: 1.5rem; padding: 0.75rem 2rem; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            Login
+                        </button>
+                        <p id="login-error" class="hidden" style="margin-top: 1rem; color: #f87171;"></p>
+                    </div>
+
+                    <!-- Project Selection (shown after login) -->
+                    <div id="project-container" class="hidden">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="color: var(--text-primary); margin: 0;">📁 Select Project</h3>
+                            <button onclick="handleLogout()"
+                                style="padding: 0.5rem 1rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                                Logout
+                            </button>
+                        </div>
+                        <div style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                            <span id="session-info"></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <select id="project-select"
+                                style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); flex: 1; max-width: 380px;">
+                                <option value="" disabled selected>Select a project</option>
+                            </select>
+                            <button id="projects-sort-icon" onclick="sortProjectsToggle()"
+                                title="API order (click to sort A-Z)"
+                                style="padding: 0.5rem 0.75rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-size: 1.1rem;">
+                                📋
+                            </button>
+                        </div>
+                        <div id="plot-info" class="hidden"
+                            style="margin-top: 1rem; padding: 1rem; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
+                            <span style="color: var(--text-secondary);">Total Plots: </span>
+                            <strong id="plot-count" style="color: var(--text-primary);">-</strong>
+                            <span id="plot-loading" class="hidden"
+                                style="margin-left: 1rem; color: var(--text-secondary);">Loading...</span>
+                        </div>
+                        <div style="margin-top: 1.5rem;">
+                            <button id="generate-btn" onclick="generateDataFromAPI()" disabled
+                                style="padding: 0.75rem 2rem; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; opacity: 0.5;">
+                                📊 Generate Data
+                            </button>
+                            <span id="generate-progress" class="hidden"
+                                style="margin-left: 1rem; color: var(--text-secondary);">
+                                Fetching: <span id="progress-text">0/0</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Data Unit Configuration (Shown after upload) -->
+        <section id="unit-config-section" class="hidden" style="margin-bottom: 2rem;">
+            <div class="unit-config-container">
+                <h3 style="margin-bottom: 1rem; color: var(--text-primary);">📊 Data Unit Configuration</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    Select the units that match your Excel data for Expected and Re-estimated values.
+                    Predicted values (always in Tonnes) will be converted to match.
+                </p>
+                <div class="unit-config-row">
+                    <div class="unit-config-item">
+                        <label for="data-yield-unit">Data Unit for Yield</label>
+                        <select id="data-yield-unit" class="unit-selector-large">
+                            <option value="kgs_acre" selected>Kgs/Acre</option>
+                            <option value="kgs_ha">Kgs/Ha</option>
+                            <option value="ton_acre">Ton/Acre</option>
+                            <option value="ton_ha">Ton/Ha</option>
+                            <option value="uston_acre">US Ton/Acre</option>
+                            <option value="uston_ha">US Ton/Ha</option>
+                        </select>
+                    </div>
+                    <div class="unit-config-item">
+                        <label for="data-area-unit">Data Unit for Area</label>
+                        <select id="data-area-unit" class="unit-selector-large">
+                            <option value="acre" selected>Acres</option>
+                            <option value="ha">Hectares</option>
+                        </select>
+                    </div>
+                    <div class="unit-config-item">
+                        <label for="data-harvest-unit">Data Unit for Harvest</label>
+                        <select id="data-harvest-unit" class="unit-selector-large">
+                            <option value="kgs" selected>Kgs</option>
+                            <option value="ton">Tonnes</option>
+                            <option value="uston">US Ton</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content (Hidden until upload) -->
+        <div id="dashboard-content" class="hidden">
+
+            <!-- 1. Aggregate Section -->
+            <section class="dashboard-section">
+                <h2 class="section-title">1. Aggregate Level</h2>
+                <div style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.95rem;">
+                    <span style="margin-right: 2rem;">Total Area: <span id="agg-total-area">-</span></span>
+                    <span>Data available plots: <span id="agg-plots-count">-</span></span>
+                </div>
+                <div class="cards-row">
+                    <!-- Yield Analysis -->
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <div class="analysis-title">Yield Analysis ℹ️</div>
+                            <div class="analysis-unit">Tonnes/Ha</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Expected Yield</div>
+                                <span class="sub-text">(from config)</span>
+                            </div>
+                            <div class="metric-value" id="agg-exp-yield">-</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Re-estimated - On Field</div>
+                                <span class="sub-text">Re-estimated vs Expected</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" id="agg-re-yield">-</div>
+                                <div class="sub-text" id="agg-re-diff">↓ 0.00%</div>
+                            </div>
+                        </div>
+                        <div class="metric-row" style="align-items: flex-start;">
+                            <div>
+                                <div class="metric-label">Predicted</div>
+                                <span class="sub-text">Predicted vs Expected</span>
+                                <span class="sub-text">Predicted vs Re-estimated</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" style="color: #6366f1;">
+                                    <span id="agg-ai-yield-min">-</span> - <span id="agg-ai-yield-max">-</span>
+                                </div>
+                                <div class="sub-text" id="agg-ai-diff-exp">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                                <div class="sub-text" id="agg-ai-diff-re">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Plot Level</div>
+                            </div>
+                            <div class="metric-value"><span class="sub-text" id="agg-card-level">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Harvest Analysis -->
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <div class="analysis-title">Harvest Analysis ℹ️</div>
+                            <div class="analysis-unit">In Tonnes</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Expected Harvest</div>
+                                <span class="sub-text">(from config)</span>
+                            </div>
+                            <div class="metric-value" id="agg-exp-harvest">-</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Re-estimated - On Field</div>
+                                <span class="sub-text">Re-estimated vs Expected</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" id="agg-re-harvest">-</div>
+                                <div class="sub-text" id="agg-re-harvest-diff">↓ 0.00%</div>
+                            </div>
+                        </div>
+                        <div class="metric-row" style="align-items: flex-start;">
+                            <div>
+                                <div class="metric-label">Predicted</div>
+                                <span class="sub-text">Predicted vs Expected</span>
+                                <span class="sub-text">Predicted vs Re-estimated</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" style="color: #6366f1;">
+                                    <span id="agg-ai-harvest-min">-</span> - <span id="agg-ai-harvest-max">-</span>
+                                </div>
+                                <div class="sub-text" id="agg-ai-harvest-diff-exp">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                                <div class="sub-text" id="agg-ai-harvest-diff-re">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Plot Level Section -->
+            <section class="dashboard-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 class="section-title" style="margin-bottom: 0;">2. Plot Level</h2>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span id="toggle-label" style="color: var(--text-secondary); font-size: 0.9rem;">Yield
+                            Prediction Available</span>
+                        <label class="toggle-switch"
+                            style="position: relative; display: inline-block; width: 50px; height: 26px;">
+                            <input type="checkbox" id="prediction-toggle" checked
+                                style="opacity: 0; width: 0; height: 0;">
+                            <span
+                                style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4ade80; border-radius: 26px; transition: 0.3s;"></span>
+                            <span id="toggle-slider"
+                                style="position: absolute; height: 20px; width: 20px; left: 27px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s;"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="plot-selector-container">
+                    <div class="form-group">
+                        <label for="plot-select">Select Plot</label>
+                        <!-- Searchable Dropdown Component -->
+                        <div class="searchable-dropdown" id="plot-dropdown">
+                            <input type="text" class="dropdown-search" id="plot-search" placeholder="Search plots..."
+                                autocomplete="off">
+                            <div class="dropdown-list" id="plot-dropdown-list">
+                                <!-- Options populated by JavaScript -->
+                            </div>
+                        </div>
+                        <input type="hidden" id="plot-select-value">
+                        <div id="plot-audited-area"
+                            style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                            <!-- Audited Area will appear here -->
+                        </div>
+                    </div>
+                    <button id="show-all-plots-btn" class="show-all-plots-btn" style="display: none;">
+                        <span class="btn-icon">📊</span>
+                        <span>Show All Plots</span>
+                    </button>
+                </div>
+
+                <div class="cards-row">
+                    <!-- Plot Yield Analysis -->
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <div class="analysis-title">Yield Analysis ℹ️</div>
+                            <span class="analysis-unit" id="plot-yield-unit-label">Kgs/Acre</span>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Expected Yield</div>
+                                <span class="sub-text">(from config)</span>
+                            </div>
+                            <div class="metric-value" id="plot-exp-yield">-</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Re-estimated - On Field</div>
+                                <span class="sub-text">Re-estimated vs Expected</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" id="plot-re-yield">-</div>
+                                <div class="sub-text" id="plot-re-diff">↓ 0.00%</div>
+                            </div>
+                        </div>
+                        <div class="metric-row" style="align-items: flex-start;">
+                            <div>
+                                <div class="metric-label">Predicted</div>
+                                <span class="sub-text">Predicted vs Expected</span>
+                                <span class="sub-text">Predicted vs Re-estimated</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" style="color: #6366f1;">
+                                    <span id="plot-app-yield-min">-</span> - <span id="plot-app-yield-max">-</span>
+                                </div>
+                                <div class="sub-text" id="plot-app-diff-exp">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                                <div class="sub-text" id="plot-app-diff-re">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Card level</div>
+                            </div>
+                            <div class="metric-value"><span class="sub-text" id="plot-card-level">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Plot Harvest Analysis -->
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <div class="analysis-title">Harvest Analysis ℹ️</div>
+                            <span class="analysis-unit" id="plot-harvest-unit-label">Kgs</span>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Expected Harvest</div>
+                                <span class="sub-text">(from config)</span>
+                            </div>
+                            <div class="metric-value" id="plot-exp-harvest">-</div>
+                        </div>
+                        <div class="metric-row">
+                            <div>
+                                <div class="metric-label">Re-estimated - On Field</div>
+                                <span class="sub-text">Re-estimated vs Expected</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" id="plot-re-harvest">-</div>
+                                <div class="sub-text" id="plot-re-harvest-diff">↓ 0.00%</div>
+                            </div>
+                        </div>
+                        <div class="metric-row" style="align-items: flex-start;">
+                            <div>
+                                <div class="metric-label">Predicted</div>
+                                <span class="sub-text">Predicted vs Expected</span>
+                                <span class="sub-text">Predicted vs Re-estimated</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="metric-value" style="color: #6366f1;">
+                                    <span id="plot-app-harvest-min">-</span> - <span id="plot-app-harvest-max">-</span>
+                                </div>
+                                <div class="sub-text" id="plot-app-harvest-diff-exp">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                                <div class="sub-text" id="plot-app-harvest-diff-re">
+                                    <span class="value-green">↑ 0%</span> - <span class="value-green">↑ 0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- All Plots Fullscreen Page -->
+    <div id="all-plots-modal" class="modal-fullscreen">
+        <!-- Fixed Header -->
+        <div class="modal-fullscreen-header">
+            <h2 class="modal-fullscreen-title">📊 All Plots Data</h2>
+            <button class="modal-close-btn" onclick="closeAllPlotsModal()">
+                ✕ Close
+            </button>
+        </div>
+
+        <!-- Fixed Controls Section -->
+        <div class="modal-controls-fixed">
+            <div class="table-controls" style="margin: 0;">
+                <div class="table-search-container">
+                    <input type="text" id="table-search" class="table-search-input" placeholder="🔍 Search plots...">
+                </div>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div class="sort-controls">
+                        <label for="sort-by">Sort by:</label>
+                        <select id="sort-by" class="sort-selector">
+                            <option value="">-- Select --</option>
+                            <option value="plotLevel">Plot Level %</option>
+                            <option value="yieldMinExp">Yield Min vs Exp %</option>
+                            <option value="yieldMinRe">Yield Min vs Est %</option>
+                            <option value="yieldMaxExp">Yield Max vs Exp %</option>
+                            <option value="yieldMaxRe">Yield Max vs Est %</option>
+                            <option value="harvestMinExp">Harvest Min vs Exp %</option>
+                            <option value="harvestMinRe">Harvest Min vs Est %</option>
+                            <option value="harvestMaxExp">Harvest Max vs Exp %</option>
+                            <option value="harvestMaxRe">Harvest Max vs Est %</option>
+                        </select>
+                        <button id="sort-order-btn" class="sort-order-btn" title="Toggle sort order">↑ Asc</button>
+                    </div>
+                    <button id="export-excel-btn" class="export-btn" onclick="exportToExcel()">
+                        📥 Export Excel
+                    </button>
+                    <div class="table-pagination-controls">
+                        <label for="rows-per-page">Show:</label>
+                        <select id="rows-per-page">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                        </select>
+                        <span>per page</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scrollable Table Section -->
+        <div class="modal-table-scroll">
+            <table id="all-plots-table" class="plots-table">
+                <thead>
+                    <tr>
+                        <th>Plot Name</th>
+                        <th id="th-audited-area"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('auditedArea')">Audited Area <span id="sort-icon-auditedArea"
+                                class="ml-1"></span></th>
+                        <th id="th-exp-harvest"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('h1')">Expected Harvest <span id="sort-icon-h1" class="ml-1"></span></th>
+                        <th id="th-re-harvest"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('h2')">Re-est Harvest <span id="sort-icon-h2" class="ml-1"></span></th>
+                        <th id="th-pred-harvest-min"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('h3_min')">Pred Harvest Min <span id="sort-icon-h3_min"
+                                class="ml-1"></span></th>
+                        <th id="th-pred-harvest-avg"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('h3_avg')">Pred Harvest Avg <span id="sort-icon-h3_avg"
+                                class="ml-1"></span></th>
+                        <th id="th-pred-harvest-max"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('h3_max')">Pred Harvest Max <span id="sort-icon-h3_max"
+                                class="ml-1"></span></th>
+                        <th id="th-exp-yield"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('y1')">Expected Yield <span id="sort-icon-y1" class="ml-1"></span></th>
+                        <th id="th-re-yield"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('y2')">Re-est Yield <span id="sort-icon-y2" class="ml-1"></span></th>
+                        <th id="th-pred-yield-min"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('y3_min')">Pred Yield Min <span id="sort-icon-y3_min"
+                                class="ml-1"></span></th>
+                        <th id="th-pred-yield-avg"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('y3_avg')">Pred Yield Avg <span id="sort-icon-y3_avg"
+                                class="ml-1"></span></th>
+                        <th id="th-pred-yield-max"
+                            class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
+                            onclick="sortTable('y3_max')">Pred Yield Max <span id="sort-icon-y3_max"
+                                class="ml-1"></span></th>
+                    </tr>
+                </thead>
+                <tbody id="all-plots-tbody">
+                    <!-- Table rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Fixed Pagination Footer -->
+        <div class="modal-pagination-fixed">
+            <div class="pagination-container" style="margin: 0;">
+                <div class="pagination-info" id="pagination-info">Showing 0-0 of 0</div>
+                <div class="pagination-buttons">
+                    <button id="prev-page-btn" class="pagination-btn" disabled>← Previous</button>
+                    <span id="page-numbers" class="page-numbers"></span>
+                    <button id="next-page-btn" class="pagination-btn">Next →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="aggregate_script.js"></script>
+</body>
+
+</html>
