@@ -412,7 +412,7 @@ function processData(rows) {
 
         const harvestUnit = getDataHarvestUnit();
         let expHarvestTonnes, reHarvestTonnes;
-        
+
         if (harvestUnit === 'ton') {
             expHarvestTonnes = expHarvestSum;
             reHarvestTonnes = reHarvestSum;
@@ -737,7 +737,7 @@ function renderPaginatedTable() {
 
             switch (sortBy) {
                 // ... (Implement sort logic if needed, keeping simple for copy) ...
-                default: 
+                default:
                     valA = dA.name;
                     valB = dB.name;
             }
@@ -768,7 +768,7 @@ function renderPaginatedTable() {
 
         // ... (Simplified logic for brevity in copy, preserving core table rendering) ...
         // Re-implementing core rendering:
-        
+
         const yieldReDiff = ((d.y2 - d.y1) / d.y1 * 100).toFixed(2);
         const yieldReClass = d.y2 >= d.y1 ? 'value-green' : 'value-red';
         const yieldReArrow = d.y2 >= d.y1 ? '↑' : '↓';
@@ -1003,7 +1003,7 @@ async function handleLogin() {
     const password = document.getElementById('login-password').value;
     const loginError = document.getElementById('login-error');
     const loginBtn = document.getElementById('login-btn');
-    
+
     // Get server URL
     const baseUrl = getServerUrl();
 
@@ -1021,7 +1021,10 @@ async function handleLogin() {
         // Use Dynamic URL
         const response = await fetch(`${baseUrl}/api/user-aggregate/token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            },
             body: JSON.stringify({ environment, tenant, username, password })
         });
 
@@ -1056,7 +1059,10 @@ async function fetchUserInfo() {
     const baseUrl = getServerUrl();
     try {
         const response = await fetch(`${baseUrl}/api/user-aggregate/user-info?environment=${encodeURIComponent(currentEnvironment)}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
         });
         const data = await response.json();
         if (data.success && data.data && data.data.preferences) {
@@ -1087,7 +1093,10 @@ async function loadProjects() {
     const baseUrl = getServerUrl();
     try {
         const response = await fetch(`${baseUrl}/api/user-aggregate/projects?environment=${encodeURIComponent(currentEnvironment)}&tenant=${encodeURIComponent(currentTenant)}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
         });
 
         const data = await response.json();
@@ -1119,7 +1128,10 @@ document.getElementById('project-select')?.addEventListener('change', async func
 
     try {
         const response = await fetch(`${baseUrl}/api/user-aggregate/plots?environment=${encodeURIComponent(currentEnvironment)}&projectId=${encodeURIComponent(projectId)}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
         });
 
         const data = await response.json();
@@ -1159,10 +1171,16 @@ async function generateDataFromAPI() {
         try {
             const [caResponse, yieldResponse] = await Promise.all([
                 fetch(`${baseUrl}/api/user-aggregate/ca-details?environment=${encodeURIComponent(currentEnvironment)}&caId=${encodeURIComponent(plot.caId)}`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'ngrok-skip-browser-warning': 'true'
+                    }
                 }),
                 fetch(`${baseUrl}/api/user-aggregate/yield-prediction?environment=${encodeURIComponent(currentEnvironment)}&caIds=${encodeURIComponent(plot.caId)}`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'ngrok-skip-browser-warning': 'true'
+                    }
                 })
             ]);
 
