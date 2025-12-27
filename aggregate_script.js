@@ -1,9 +1,19 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     // Auto-detect production environment
     const urlInput = document.getElementById('server-url');
-    if (urlInput && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        urlInput.value = window.location.origin; // Set to current site URL (e.g. on Render)
+    const urlContainer = document.getElementById('server-url-container');
+    const isRender = window.location.hostname.includes('onrender.com');
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (urlInput && !isLocal) {
+        // We are likely on Render or another deployed environment
+        urlInput.value = window.location.origin; // Set to current site URL
+
+        // Hide the input if it's explicitly Render or just not local (user preference)
+        // User asked: "show if it is not render" -> implies hide IF IT IS render.
+        if (isRender && urlContainer) {
+            urlContainer.style.display = 'none';
+        }
     }
 });
 

@@ -1,0 +1,26 @@
+{
+  "environment_urls": {
+    "QA1": "https://v2.cropin.co.in",
+    "QA2": "https://sf-v2.cropin.co.in",
+    "QA3": "https://sg-v2.cropin.co.in",
+    "QA4": "https://eu-v2.cropin.co.in",
+    "QA5": "https://af-v2.cropin.co.in",
+    "QA6": "https://ca-v2.cropin.co.in",
+    "QA7": "https://au-v2.cropin.co.in",
+    "QA8": "https://us-v2.cropin.co.in",
+    "UAT1": "https://uat1.cropin.com",
+    "UAT2": "https://uat2.cropin.com",
+    "PROD": "https://cloud.cropin.in"
+  },
+  "environment_api_urls": {
+    "QA1": "https://v2-gcp.cropin.co.in/qa1",
+    "QA2": "https://sf-v2-gcp.cropin.co.in/qa2",
+    "QA3": "https://sg-v2-gcp.cropin.co.in/qa3",
+    "QA4": "https://eu-v2-gcp.cropin.co.in/qa4",
+    "QA5": "https://af-v2-gcp.cropin.co.in/qa5",
+    "QA6": "https://ca-v2-gcp.cropin.co.in/qa6",
+    "QA7": "https://au-v2-gcp.cropin.co.in/qa7",
+    "QA8": "https://us-v2-gcp.cropin.co.in/qa8",
+    "Prod": "https://cloud.cropin.in"
+  }
+}
