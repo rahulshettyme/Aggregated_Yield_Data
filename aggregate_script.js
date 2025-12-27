@@ -1,3 +1,12 @@
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto-detect production environment
+    const urlInput = document.getElementById('server-url');
+    if (urlInput && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        urlInput.value = window.location.origin; // Set to current site URL (e.g. on Render)
+    }
+});
+
 document.getElementById('excel-upload').addEventListener('change', handleFileUpload);
 
 let globalData = [];
