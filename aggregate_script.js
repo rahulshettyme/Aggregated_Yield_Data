@@ -1059,7 +1059,7 @@ async function handleLogin() {
 
         document.getElementById('login-form-container').classList.add('hidden');
         document.getElementById('project-container').classList.remove('hidden');
-        document.getElementById('session-info').textContent = `${environment} | ${tenant} | ${username}`;
+        document.getElementById('session-info').textContent = `${environment} | ${tenant} | ${username} | Loading Prefs...`;
 
         await Promise.all([loadProjects(), fetchUserInfo()]);
 
@@ -1073,6 +1073,7 @@ async function handleLogin() {
 }
 
 let userPrefs = {};
+let companyPrefs = {};
 
 async function fetchUserInfo() {
     const baseUrl = getServerUrl();
@@ -1083,14 +1084,52 @@ async function fetchUserInfo() {
                 'ngrok-skip-browser-warning': 'true'
             }
         });
-        const data = await response.json();
-        if (data.success && data.data && data.data.preferences) {
-            userPrefs = data.data.preferences;
-        } else if (data.data) {
-            userPrefs = data.data.preferences || data.preferences || {};
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            userPrefs = result.data.preferences || {};
+            const companyId = result.data.companyId;
+
+            console.log('User Info Fetched:', result.data);
+
+            if (companyId) {
+                await fetchCompanyInfo(companyId);
+            }
+            updateElement('session-info', `${currentEnvironment} | ${currentTenant} | User: ${userPrefs.areaUnits || 'NA'} | Co: ${companyPrefs.areaUnits || 'NA'}`);
+        } else {
+            console.warn('User Info API returned success=false');
+            updateElement('session-info', `${currentEnvironment} | ${currentTenant} | User Fetch Failed`);
         }
     } catch (e) {
         console.warn('Failed to fetch user info', e);
+        updateElement('session-info', `${currentEnvironment} | ${currentTenant} | User Fetch Error`);
+    }
+}
+
+async function fetchCompanyInfo(companyId) {
+    const baseUrl = getServerUrl();
+    try {
+        const response = await fetch(`${baseUrl}/api/user-aggregate/company-info?environment=${encodeURIComponent(currentEnvironment)}&companyId=${encodeURIComponent(companyId)}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
+        });
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            // Path: data > preferences > "areaUnits"
+            if (result.data.preferences) {
+                companyPrefs = result.data.preferences;
+            } else if (result.data.data && result.data.data.preferences) {
+                companyPrefs = result.data.data.preferences;
+            }
+            console.log('Company Info Fetched:', companyPrefs);
+            // Update display again to show company status
+            updateElement('session-info', `${currentEnvironment} | ${currentTenant} | User: ${userPrefs.areaUnits || 'NA'} | Co: ${companyPrefs.areaUnits || 'NA'}`);
+        }
+    } catch (e) {
+        console.warn('Failed to fetch company info', e);
     }
 }
 
@@ -1252,18 +1291,39 @@ async function generateDataFromAPI() {
     generateBtn.disabled = false;
     generateBtn.style.opacity = '1';
 
+    let companyAreaUnit = 'ha';
+    if (authToken && companyPrefs) {
+        const cArea = (companyPrefs.areaUnits || '').toLowerCase();
+        if (cArea.includes('acre')) companyAreaUnit = 'acre';
+    }
+
     let userAreaUnit = 'ha';
-    if (authToken && userPrefs) {
+    if (authToken && userPrefs && userPrefs.areaUnits) {
         const uArea = (userPrefs.areaUnits || '').toLowerCase();
         if (uArea.includes('acre')) userAreaUnit = 'acre';
+    } else {
+        // Fallback: If User Prefs missing/empty, assume User wants what Company has
+        // This fixes the issue where User API suceeds but has no pref, defaulting to Ha incorrectly
+        userAreaUnit = companyAreaUnit;
     }
+
+    console.log(`Unit Logic: Company=${companyAreaUnit}, User=${userAreaUnit}`);
 
     setUnit('data-area-unit', userAreaUnit);
 
+    const HA_TO_ACRE = 2.47105;
+
     generatedData.forEach(d => {
-        if (userAreaUnit === 'acre') {
-            d['Audited Area'] = d['Audited Area'] * 2.47105;
+        // Convert Company Unit (Source) -> User Unit (Target)
+        let sourceVal = d['Audited Area'] || 0;
+
+        if (companyAreaUnit === 'ha' && userAreaUnit === 'acre') {
+            d['Audited Area'] = sourceVal * HA_TO_ACRE;
+        } else if (companyAreaUnit === 'acre' && userAreaUnit === 'ha') {
+            d['Audited Area'] = sourceVal / HA_TO_ACRE;
         }
+        // If units match, no conversion needed
+
         if (d['Audited Area'] > 0) {
             d['Expected YIELD'] = (d['Expected Harvest'] || 0) / d['Audited Area'];
             d['Re-estimated Yield'] = (d['Re-estimated Harvest'] || 0) / d['Audited Area'];

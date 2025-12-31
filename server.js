@@ -99,11 +99,94 @@ app.post('/api/user-aggregate/token', async (req, res) => {
     }
 });
 
-// GET User-Info
+// GET User-Info (Real Implementation)
 app.get('/api/user-aggregate/user-info', (req, res) => {
-    // Placeholder to prevent 404 errors until actual implementation is needed
-    // This allows the frontend to proceed without error
-    res.json({ success: true, data: { preferences: {} } });
+    const { environment } = req.query;
+    const authHeader = req.headers.authorization;
+
+    if (!environment) return res.status(400).json({ error: 'Missing environment' });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+
+    const db = readDb();
+    const envApiUrls = db.environment_api_urls || {};
+    const envUrls = db.environment_urls || {};
+    let apiBaseUrl = null;
+    let frontendUrl = null;
+    for (const key of Object.keys(envApiUrls)) if (key.toLowerCase() === environment.toLowerCase()) { apiBaseUrl = envApiUrls[key]; break; }
+    for (const key of Object.keys(envUrls)) if (key.toLowerCase() === environment.toLowerCase()) { frontendUrl = envUrls[key]; break; }
+
+    if (!apiBaseUrl) return res.status(400).json({ error: 'Unknown environment' });
+
+    const fullUrl = apiBaseUrl + `/services/user/api/users/user-info`;
+    const urlObj = new URL(fullUrl);
+    const options = {
+        hostname: urlObj.hostname, port: 443, path: urlObj.pathname, method: 'GET',
+        headers: {
+            'Authorization': authHeader, 'Accept': 'application/json', 'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0',
+            'origin': frontendUrl || apiBaseUrl, 'referer': (frontendUrl || apiBaseUrl) + '/'
+        }
+    };
+
+    https.request(options, (userRes) => {
+        let data = '';
+        userRes.on('data', chunk => data += chunk);
+        userRes.on('end', () => {
+            if (data.trim().startsWith('<')) return res.status(502).json({ error: 'API returned HTML' });
+            try {
+                const jsonData = JSON.parse(data);
+                if (userRes.statusCode >= 200 && userRes.statusCode < 300) {
+                    res.json({ success: true, data: jsonData });
+                } else {
+                    res.status(userRes.statusCode).json({ error: jsonData.message || 'Failed to fetch user info' });
+                }
+            } catch (e) { res.status(500).json({ error: 'Parse Error' }); }
+        });
+    }).on('error', e => res.status(500).json({ error: e.message })).end();
+});
+
+// GET Company-Info (New)
+app.get('/api/user-aggregate/company-info', (req, res) => {
+    const { environment, companyId } = req.query;
+    const authHeader = req.headers.authorization;
+
+    if (!environment || !companyId) return res.status(400).json({ error: 'Missing params' });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+
+    const db = readDb();
+    const envApiUrls = db.environment_api_urls || {};
+    const envUrls = db.environment_urls || {};
+    let apiBaseUrl = null;
+    let frontendUrl = null;
+    for (const key of Object.keys(envApiUrls)) if (key.toLowerCase() === environment.toLowerCase()) { apiBaseUrl = envApiUrls[key]; break; }
+    for (const key of Object.keys(envUrls)) if (key.toLowerCase() === environment.toLowerCase()) { frontendUrl = envUrls[key]; break; }
+
+    const fullUrl = apiBaseUrl + `/services/farm/api/companies/${companyId}`;
+    const urlObj = new URL(fullUrl);
+    const options = {
+        hostname: urlObj.hostname, port: 443, path: urlObj.pathname, method: 'GET',
+        headers: {
+            'Authorization': authHeader, 'Accept': 'application/json', 'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0',
+            'origin': frontendUrl || apiBaseUrl, 'referer': (frontendUrl || apiBaseUrl) + '/'
+        }
+    };
+
+    https.request(options, (compRes) => {
+        let data = '';
+        compRes.on('data', chunk => data += chunk);
+        compRes.on('end', () => {
+            if (data.trim().startsWith('<')) return res.status(502).json({ error: 'API returned HTML' });
+            try {
+                const jsonData = JSON.parse(data);
+                if (compRes.statusCode >= 200 && compRes.statusCode < 300) {
+                    res.json({ success: true, data: jsonData });
+                } else {
+                    res.status(compRes.statusCode).json({ error: jsonData.message || 'Failed to fetch company info' });
+                }
+            } catch (e) { res.status(500).json({ error: 'Parse Error' }); }
+        });
+    }).on('error', e => res.status(500).json({ error: e.message })).end();
 });
 
 
