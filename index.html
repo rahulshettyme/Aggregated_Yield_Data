@@ -388,14 +388,30 @@
                             <span id="session-info"></span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <select id="project-select"
-                                style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); flex: 1; max-width: 380px;">
-                                <option value="" disabled selected>Select a project</option>
-                            </select>
+                            <!-- Custom Multi-Select Dropdown -->
+                            <div class="custom-select-container" style="position: relative; flex: 1; max-width: 380px;">
+                                <div id="selected-projects-trigger" onclick="toggleMultiSelect()"
+                                    style="padding: 0.75rem; border-radius: 8px; background: var(--input-bg, #1e1e2e); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                    <span id="trigger-text">Select Projects (Max 5)</span>
+                                    <span style="font-size: 0.8rem;">▼</span>
+                                </div>
+                                <div id="projects-dropdown-list" class="hidden"
+                                    style="position: absolute; top: 100%; left: 0; right: 0; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem; max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                                    <!-- Checkboxes will be injected here -->
+                                </div>
+                            </div>
+
                             <button id="projects-sort-icon" onclick="sortProjectsToggle()"
                                 title="API order (click to sort A-Z)"
                                 style="padding: 0.5rem 0.75rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-size: 1.1rem;">
                                 📋
+                            </button>
+                        </div>
+                        <!-- Add Load Button (Initially Hidden/Disabled until selection) -->
+                        <div style="margin-top: 1rem; text-align: right;">
+                            <button id="load-data-btn" onclick="handleLoadPlots()" disabled
+                                style="padding: 0.6rem 1.2rem; background: var(--primary-color); opacity: 0.5; color: white; border: none; border-radius: 6px; cursor: not-allowed; transition: all 0.3s;">
+                                Load Data
                             </button>
                         </div>
                         <div id="plot-info" class="hidden"
@@ -406,12 +422,9 @@
                                 style="margin-left: 1rem; color: var(--text-secondary);">Loading...</span>
                         </div>
                         <div style="margin-top: 1.5rem;">
-                            <button id="generate-btn" onclick="generateDataFromAPI()" disabled
-                                style="padding: 0.75rem 2rem; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; opacity: 0.5;">
-                                📊 Generate Data
-                            </button>
+                            <!-- Removed Generate Button as functionality is merged into Load Data -->
                             <span id="generate-progress" class="hidden"
-                                style="margin-left: 1rem; color: var(--text-secondary);">
+                                style="margin-left: 0; color: var(--text-secondary);">
                                 Fetching: <span id="progress-text">0/0</span>
                             </span>
                         </div>
@@ -569,17 +582,15 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h2 class="section-title" style="margin-bottom: 0;">2. Plot Level</h2>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span id="toggle-label" style="color: var(--text-secondary); font-size: 0.9rem;">Yield
-                            Prediction Available</span>
-                        <label class="toggle-switch"
-                            style="position: relative; display: inline-block; width: 50px; height: 26px;">
-                            <input type="checkbox" id="prediction-toggle" checked
-                                style="opacity: 0; width: 0; height: 0;">
-                            <span
-                                style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4ade80; border-radius: 26px; transition: 0.3s;"></span>
-                            <span id="toggle-slider"
-                                style="position: absolute; height: 20px; width: 20px; left: 27px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s;"></span>
-                        </label>
+                        <span style="color: var(--text-secondary); font-size: 0.9rem; margin-right: 0.5rem;">Filter
+                            Plots:</span>
+                        <select id="prediction-filter"
+                            style="padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); cursor: pointer;">
+                            <option value="all">Show All Plots</option>
+                            <option value="available" selected>Prediction Available</option>
+                            <option value="unavailable">Prediction Not Available</option>
+                            <option value="not_enabled">Plot Intelligence Not Enabled</option>
+                        </select>
                     </div>
                 </div>
 
@@ -587,12 +598,25 @@
                     <div class="form-group">
                         <label for="plot-select">Select Plot</label>
                         <!-- Searchable Dropdown Component -->
-                        <div class="searchable-dropdown" id="plot-dropdown">
-                            <input type="text" class="dropdown-search" id="plot-search" placeholder="Search plots..."
-                                autocomplete="off">
-                            <div class="dropdown-list" id="plot-dropdown-list">
-                                <!-- Options populated by JavaScript -->
+                        <!-- Searchable Dropdown Component with Navigation -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button onclick="navigatePlot(-1)" title="Previous Plot"
+                                style="padding: 0.5rem 0.8rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; color: var(--text-primary);">
+                                &lt;
+                            </button>
+
+                            <div class="searchable-dropdown" id="plot-dropdown" style="flex-grow: 1;">
+                                <input type="text" class="dropdown-search" id="plot-search"
+                                    placeholder="Search plots..." autocomplete="off">
+                                <div class="dropdown-list" id="plot-dropdown-list">
+                                    <!-- Options populated by JavaScript -->
+                                </div>
                             </div>
+
+                            <button onclick="navigatePlot(1)" title="Next Plot"
+                                style="padding: 0.5rem 0.8rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; color: var(--text-primary);">
+                                &gt;
+                            </button>
                         </div>
                         <input type="hidden" id="plot-select-value">
                         <div id="plot-audited-area"

@@ -5,14 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const isRender = window.location.hostname.includes('onrender.com');
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    if (urlInput && !isLocal) {
-        // We are likely on Render or another deployed environment
-        urlInput.value = window.location.origin; // Set to current site URL
-
-        // Hide the input if it's explicitly Render or just not local (user preference)
-        // User asked: "show if it is not render" -> implies hide IF IT IS render.
-        if (isRender && urlContainer) {
+    if (urlInput) {
+        // User Request: Remove Backend Server URL when running in local
+        if (isLocal && urlContainer) {
             urlContainer.style.display = 'none';
+        }
+
+        if (!isLocal) {
+            // We are likely on Render or another deployed environment
+            urlInput.value = window.location.origin; // Set to current site URL
+
+            // Hide the input if it's explicitly Render
+            if (isRender && urlContainer) {
+                urlContainer.style.display = 'none';
+            }
         }
     }
 });
@@ -22,8 +28,9 @@ document.getElementById('excel-upload').addEventListener('change', handleFileUpl
 let globalData = [];
 let plotsList = []; // Store plot names for searchable dropdown
 let plotsWithPrediction = []; // Plots with yield prediction data
-let plotsWithoutPrediction = []; // Plots without prediction data
-let showPredictionAvailable = true; // Toggle state
+let plotsWithoutPrediction = []; // Missing Data plots
+let plotsNotEnabled = []; // Not Enabled plots
+let showPredictionAvailable = true; // Toggle state (Legacy)
 let aggregateMetrics = {
     expYield: 0, reYield: 0, aiYield: 0,
     expHarvest: 0, reHarvest: 0, aiHarvest: 0
@@ -171,9 +178,14 @@ function initSearchableDropdown() {
 
     let highlightedIndex = -1;
 
-    searchInput.addEventListener('focus', () => {
-        renderDropdownOptions(searchInput.value);
+    searchInput.addEventListener('focus', function () {
+        this.select(); // Auto-select text for easy clearing
+        renderDropdownOptions(this.value);
         dropdownList.classList.add('show');
+    });
+
+    searchInput.addEventListener('click', function () {
+        this.select(); // Ensure click also selects all
     });
 
     searchInput.addEventListener('input', (e) => {
@@ -258,6 +270,8 @@ function initSearchableDropdown() {
 }
 
 function populateSearchableDropdown(plots) {
+    // Sort plots alphabetically by name
+    plots.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     plotsList = plots;
     const searchInput = document.getElementById('plot-search');
     const hiddenInput = document.getElementById('plot-select-value');
@@ -311,7 +325,8 @@ function handleFileUpload(event) {
 function processData(rows) {
     globalData = rows;
     const plots = [];
-    const skippedPlots = [];
+    const skippedPlots = []; // Prediction Not Available (Data Missing)
+    const notEnabledPlots = []; // Plot Intelligence Not Enabled
 
     let expHarvestSum = 0, reHarvestSum = 0;
     let aiHarvestMinSum = 0, aiHarvestMaxSum = 0;
@@ -358,18 +373,34 @@ function processData(rows) {
         const h2 = getVal(row, ['re-estimated harvest', 're_harvest']);
 
         if (y3_min === 0 && y3_max === 0 && h3_min === 0 && h3_max === 0) {
-            skippedPlots.push(caName);
-            row._processed = {
-                name: caName,
-                auditedArea: auditedAreaFromExcel.toFixed(2),
-                y1, y2,
-                y3_min: null, y3_max: null,
-                y3_raw_min: null, y3_raw_max: null,
-                h1, h2,
-                h3_min: null, h3_max: null,
-                h3_raw_min: null, h3_raw_max: null,
-                noPrediction: true
-            };
+            if (row['Yield Not Enabled']) {
+                notEnabledPlots.push(caName);
+                row._processed = {
+                    name: caName,
+                    auditedArea: auditedAreaFromExcel.toFixed(2),
+                    y1, y2,
+                    y3_min: null, y3_max: null,
+                    y3_raw_min: null, y3_raw_max: null,
+                    h1, h2,
+                    h3_min: null, h3_max: null,
+                    h3_raw_min: null, h3_raw_max: null,
+                    noPrediction: true,
+                    notEnabled: true
+                };
+            } else {
+                skippedPlots.push(caName);
+                row._processed = {
+                    name: caName,
+                    auditedArea: auditedAreaFromExcel.toFixed(2),
+                    y1, y2,
+                    y3_min: null, y3_max: null,
+                    y3_raw_min: null, y3_raw_max: null,
+                    h1, h2,
+                    h3_min: null, h3_max: null,
+                    h3_raw_min: null, h3_raw_max: null,
+                    noPrediction: true
+                };
+            }
             return;
         }
 
@@ -417,7 +448,8 @@ function processData(rows) {
 
     plotsWithPrediction = plots;
     plotsWithoutPrediction = skippedPlots;
-    populateSearchableDropdown(showPredictionAvailable ? plotsWithPrediction : plotsWithoutPrediction);
+    plotsNotEnabled = notEnabledPlots;
+    populateSearchableDropdown(plotsWithPrediction); // Default view
 
     if (count > 0) {
         let displayAreaHa;
@@ -1143,8 +1175,7 @@ function handleLogout() {
     document.getElementById('project-container').classList.add('hidden');
     document.getElementById('project-select').innerHTML = '<option value="" disabled selected>Select a project</option>';
     document.getElementById('plot-info').classList.add('hidden');
-    document.getElementById('generate-btn').disabled = true;
-    document.getElementById('generate-btn').style.opacity = '0.5';
+    document.getElementById('plot-info').classList.add('hidden');
 }
 
 async function loadProjects() {
@@ -1168,57 +1199,56 @@ async function loadProjects() {
     }
 }
 
-document.getElementById('project-select')?.addEventListener('change', async function () {
-    const projectId = this.value;
-    if (!projectId) return;
+// document.getElementById('project-select')?.addEventListener('change', async function () {
+/*
+const projectId = this.value;
+if (!projectId) return;
 
-    const plotInfo = document.getElementById('plot-info');
-    const plotCount = document.getElementById('plot-count');
-    const plotLoading = document.getElementById('plot-loading');
-    const generateBtn = document.getElementById('generate-btn');
-    const baseUrl = getServerUrl();
+const plotInfo = document.getElementById('plot-info');
+const plotCount = document.getElementById('plot-count');
+const plotLoading = document.getElementById('plot-loading');
+const generateBtn = document.getElementById('generate-btn');
+const baseUrl = getServerUrl();
 
-    plotInfo.classList.remove('hidden');
-    plotLoading.classList.remove('hidden');
-    plotCount.textContent = '-';
-    generateBtn.disabled = true;
-    generateBtn.style.opacity = '0.5';
+plotInfo.classList.remove('hidden');
+plotLoading.classList.remove('hidden');
+plotCount.textContent = '-';
+generateBtn.disabled = true;
+generateBtn.style.opacity = '0.5';
 
-    try {
-        const response = await fetch(`${baseUrl}/api/user-aggregate/plots?environment=${encodeURIComponent(currentEnvironment)}&projectId=${encodeURIComponent(projectId)}`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'ngrok-skip-browser-warning': 'true'
-            }
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to load plots');
-
-        plotsData = data.plots || [];
-        plotCount.textContent = plotsData.length;
-
-        if (plotsData.length > 0) {
-            generateBtn.disabled = false;
-            generateBtn.style.opacity = '1';
+try {
+    const response = await fetch(`${baseUrl}/api/user-aggregate/plots?environment=${encodeURIComponent(currentEnvironment)}&projectId=${encodeURIComponent(projectId)}`, {
+        headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'ngrok-skip-browser-warning': 'true'
         }
+    });
 
-    } catch (error) {
-        console.error('Error loading plots:', error);
-        plotCount.textContent = 'Error';
-    } finally {
-        plotLoading.classList.add('hidden');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to load plots');
+
+    plotsData = data.plots || [];
+    plotCount.textContent = plotsData.length;
+
+    if (plotsData.length > 0) {
+        generateBtn.disabled = false;
+        generateBtn.style.opacity = '1';
     }
-});
+
+} catch (error) {
+    console.error('Error loading plots:', error);
+    plotCount.textContent = 'Error';
+} finally {
+    plotLoading.classList.add('hidden');
+}
+*/
+// });
 
 async function generateDataFromAPI() {
-    const generateBtn = document.getElementById('generate-btn');
     const progressSpan = document.getElementById('generate-progress');
     const progressText = document.getElementById('progress-text');
     const baseUrl = getServerUrl();
 
-    generateBtn.disabled = true;
-    generateBtn.style.opacity = '0.5';
     progressSpan.classList.remove('hidden');
 
     const generatedData = [];
@@ -1227,25 +1257,40 @@ async function generateDataFromAPI() {
 
     async function fetchPlotData(plot) {
         try {
-            const [caResponse, yieldResponse] = await Promise.all([
-                fetch(`${baseUrl}/api/user-aggregate/ca-details?environment=${encodeURIComponent(currentEnvironment)}&caId=${encodeURIComponent(plot.caId)}`, {
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'ngrok-skip-browser-warning': 'true'
-                    }
-                }),
-                fetch(`${baseUrl}/api/user-aggregate/yield-prediction?environment=${encodeURIComponent(currentEnvironment)}&caIds=${encodeURIComponent(plot.caId)}`, {
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'ngrok-skip-browser-warning': 'true'
-                    }
-                })
-            ]);
+            // Fetch CA Details first (Critical)
+            const caReq = fetch(`${baseUrl}/api/user-aggregate/ca-details?environment=${encodeURIComponent(currentEnvironment)}&caId=${encodeURIComponent(plot.caId)}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
 
-            const [caData, yieldData] = await Promise.all([
-                caResponse.json(),
-                yieldResponse.json()
-            ]);
+            // Fetch Yield Prediction (Optional - might fail if not enabled)
+            const yieldReq = fetch(`${baseUrl}/api/user-aggregate/yield-prediction?environment=${encodeURIComponent(currentEnvironment)}&caIds=${encodeURIComponent(plot.caId)}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            const [caResponse, yieldResponse] = await Promise.all([caReq, yieldReq]);
+            const caData = await caResponse.json();
+
+            let yieldData = {};
+            if (!yieldResponse.ok) {
+                // Handle specific "Not Enabled" cases gracefully
+                try {
+                    const errBody = await yieldResponse.json();
+                    const errMsg = JSON.stringify(errBody);
+                    // Check for specific error signatures: srPlotIdnull or 'not generated yet'
+                    if (errMsg.includes('error.srPlotIdnull') || errMsg.includes('Yield data is not generated yet')) {
+                        console.warn(`[INFO] Plot ${plot.caId} has no yield data (expected). Response: ${errMsg}`);
+                        yieldData = { notEnabled: true }; // Mark as explicitly not enabled
+                    } else {
+                        console.warn(`[WARN] Yield API Failed for CA ${plot.caId} | Status: ${yieldResponse.status}`, errBody);
+                        yieldData = {}; // Just missing/failed
+                    }
+                } catch (e) {
+                    console.warn(`[WARN] Yield API Failed for CA ${plot.caId} | Status: ${yieldResponse.status}`);
+                    yieldData = {};
+                }
+            } else {
+                yieldData = await yieldResponse.json();
+            }
 
             const reEstYield = caData.auditedArea > 0 ? (caData.reestimatedValue || 0) / caData.auditedArea : 0;
 
@@ -1262,7 +1307,8 @@ async function generateDataFromAPI() {
                 'Harvest Average predicted': yieldData.productionAvg,
                 'Yield Min predicted': yieldData.yieldMin,
                 'Yield Max predicted': yieldData.yieldMax,
-                'Yield Average predicted': yieldData.yieldAvg
+                'Yield Average predicted': yieldData.yieldAvg,
+                'Yield Not Enabled': yieldData.notEnabled || false // Flag for filter
             };
         } catch (error) {
             console.error(`Error fetching data for CA ${plot.caId}:`, error);
@@ -1288,8 +1334,7 @@ async function generateDataFromAPI() {
     }
 
     progressSpan.classList.add('hidden');
-    generateBtn.disabled = false;
-    generateBtn.style.opacity = '1';
+    progressSpan.classList.add('hidden');
 
     let companyAreaUnit = 'ha';
     if (authToken && companyPrefs) {
@@ -1351,25 +1396,164 @@ function setUnit(id, val) {
     if (el) el.value = val;
 }
 
+let selectedProjectIds = [];
+
+function toggleMultiSelect() {
+    const list = document.getElementById('projects-dropdown-list');
+    if (list) list.classList.toggle('hidden');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function (e) {
+    const trigger = document.getElementById('selected-projects-trigger');
+    const list = document.getElementById('projects-dropdown-list');
+    if (trigger && list && !trigger.contains(e.target) && !list.contains(e.target)) {
+        list.classList.add('hidden');
+    }
+});
+
 let projectsSortedByName = false;
 function renderProjectsList() {
-    const select = document.getElementById('project-select');
-    select.innerHTML = '<option value="" disabled selected>Select a project</option>';
+    const listContainer = document.getElementById('projects-dropdown-list');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
     const list = [...projectsList];
     if (projectsSortedByName) {
         list.sort((a, b) => a.name.localeCompare(b.name));
     }
+
     list.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = p.name;
-        select.appendChild(opt);
+        const item = document.createElement('div');
+        item.style.padding = '0.75rem';
+        item.style.borderBottom = '1px solid var(--border-color)';
+        item.style.cursor = 'pointer';
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.gap = '0.5rem';
+        item.style.transition = 'background 0.2s';
+
+        // Check if selected
+        const isSelected = selectedProjectIds.includes(p.id);
+        if (isSelected) item.style.background = 'rgba(99, 102, 241, 0.1)';
+
+        // Inner HTML for Checkbox and Label
+        item.innerHTML = `
+            <input type="checkbox" ${isSelected ? 'checked' : ''} style="cursor: pointer;">
+            <span style="color: var(--text-primary); font-size: 0.9rem;">${p.name}</span>
+        `;
+
+        // Row Click Event
+        item.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent closing dropdown
+            // Prevent toggling if clicking directly on checkbox (it handles itself)
+            if (e.target.tagName !== 'INPUT') {
+                const cb = item.querySelector('input');
+                cb.checked = !cb.checked;
+                handleProjectSelection(p.id, cb.checked);
+            }
+        });
+
+        // Checkbox Change Event
+        const checkbox = item.querySelector('input');
+        checkbox.addEventListener('click', (e) => e.stopPropagation()); // Prevent bubbling
+        checkbox.addEventListener('change', (e) => {
+            handleProjectSelection(p.id, e.target.checked);
+        });
+
+        listContainer.appendChild(item);
     });
 
     const sortIcon = document.getElementById('projects-sort-icon');
     if (sortIcon) {
         sortIcon.textContent = projectsSortedByName ? '🔤' : '📋';
         sortIcon.title = projectsSortedByName ? 'Sorted A-Z (click for API order)' : 'API order (click to sort A-Z)';
+    }
+}
+
+function handleProjectSelection(id, isSelected) {
+    if (isSelected) {
+        if (selectedProjectIds.length >= 5) {
+            alert("You can select up to 5 projects.");
+            renderProjectsList(); // Re-render to uncheck the exceeded one
+            return;
+        }
+        if (!selectedProjectIds.includes(id)) selectedProjectIds.push(id);
+    } else {
+        selectedProjectIds = selectedProjectIds.filter(pid => pid !== id);
+    }
+
+    // Update UI
+    const triggerText = document.getElementById('trigger-text');
+    if (triggerText) {
+        if (selectedProjectIds.length === 0) {
+            triggerText.textContent = "Select Projects (Max 5)";
+        } else {
+            triggerText.textContent = `${selectedProjectIds.length} Project(s) Selected`;
+        }
+    }
+
+    // Enable/Disable Load Button
+    const loadBtn = document.getElementById('load-data-btn');
+    if (loadBtn) {
+        if (selectedProjectIds.length > 0) {
+            loadBtn.disabled = false;
+            loadBtn.style.opacity = '1';
+            loadBtn.style.cursor = 'pointer';
+        } else {
+            loadBtn.disabled = true;
+            loadBtn.style.opacity = '0.5';
+            loadBtn.style.cursor = 'not-allowed';
+        }
+    }
+
+    renderProjectsList(); // Re-render to update highlights/checkboxes
+}
+
+
+async function handleLoadPlots() {
+    if (selectedProjectIds.length === 0) return;
+
+    // STEP BY STEP: Handle MULTIPLE projects
+    const projectId = selectedProjectIds.join(',');
+
+    const plotInfo = document.getElementById('plot-info');
+    const plotCount = document.getElementById('plot-count');
+    const plotLoading = document.getElementById('plot-loading');
+    const baseUrl = getServerUrl();
+
+    // Show loading UI
+    plotInfo.classList.remove('hidden');
+    plotLoading.classList.remove('hidden');
+    plotCount.textContent = '-';
+
+    try {
+        console.log(`[DEBUG] Loading plots for Project ID: ${projectId}`);
+        const response = await fetch(`${baseUrl}/api/user-aggregate/plots?environment=${encodeURIComponent(currentEnvironment)}&projectId=${encodeURIComponent(projectId)}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to load plots');
+
+        plotsData = data.plots || [];
+        plotCount.textContent = plotsData.length;
+        console.log(`[DEBUG] Loaded ${plotsData.length} plots`);
+
+        if (plotsData.length > 0) {
+            // Auto-generate data after loading plots (as per previous flow logic)
+            await generateDataFromAPI();
+        }
+
+    } catch (error) {
+        console.error('Error loading plots:', error);
+        plotCount.textContent = 'Error';
+        alert('Failed to load plots for the selected project.');
+    } finally {
+        plotLoading.classList.add('hidden');
     }
 }
 
@@ -1385,23 +1569,25 @@ document.getElementById('login-password')?.addEventListener('keypress', function
     }
 });
 
-document.getElementById('prediction-toggle')?.addEventListener('change', function () {
-    showPredictionAvailable = this.checked;
-    const toggleLabel = document.getElementById('toggle-label');
-    const toggleSlider = document.getElementById('toggle-slider');
-    const toggleBg = this.parentElement.querySelector('span:nth-child(2)');
+document.getElementById('prediction-filter')?.addEventListener('change', function () {
+    const filterValue = this.value; // 'all', 'available', 'unavailable'
+    let plotsToShow = [];
 
-    if (showPredictionAvailable) {
-        toggleLabel.textContent = 'Yield Prediction Available';
-        toggleSlider.style.left = '27px';
-        toggleBg.style.backgroundColor = '#4ade80';
-    } else {
-        toggleLabel.textContent = 'Yield Prediction Not Available';
-        toggleSlider.style.left = '3px';
-        toggleBg.style.backgroundColor = '#f87171';
+    if (filterValue === 'all') {
+        plotsToShow = [...plotsWithPrediction, ...plotsWithoutPrediction, ...plotsNotEnabled];
+    } else if (filterValue === 'available') {
+        plotsToShow = plotsWithPrediction;
+    } else if (filterValue === 'unavailable') {
+        plotsToShow = plotsWithoutPrediction;
+    } else if (filterValue === 'not_enabled') {
+        plotsToShow = plotsNotEnabled;
     }
 
-    const plotsToShow = showPredictionAvailable ? plotsWithPrediction : plotsWithoutPrediction;
+    // Sort alphabetically for "All" view to be cleaner
+    if (filterValue === 'all') {
+        plotsToShow.sort((a, b) => a.localeCompare(b));
+    }
+
     populateSearchableDropdown(plotsToShow);
     initSearchableDropdown();
 
@@ -1427,6 +1613,36 @@ function clearPlotDisplay() {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '';
         });
+}
+
+function navigatePlot(direction) {
+    // direction: -1 for Prev, 1 for Next
+    const currentPlot = document.getElementById('plot-select-value').value;
+    if (!plotsList || plotsList.length === 0) return;
+
+    let currentIndex = plotsList.indexOf(currentPlot);
+
+    // If current plot not found (e.g. init), start from -1 
+    let newIndex = currentIndex + direction;
+
+    // Handle Wrapping
+    if (newIndex < 0) {
+        newIndex = plotsList.length - 1;
+    } else if (newIndex >= plotsList.length) {
+        newIndex = 0;
+    }
+
+    const newPlot = plotsList[newIndex];
+
+    // Update Input UI
+    const searchInput = document.getElementById('plot-search');
+    const hiddenInput = document.getElementById('plot-select-value');
+
+    if (searchInput) searchInput.value = newPlot;
+    if (hiddenInput) hiddenInput.value = newPlot;
+
+    // Trigger Data Update
+    updatePlotData(newPlot);
 }
 
 window.showSourceTab = showSourceTab;
